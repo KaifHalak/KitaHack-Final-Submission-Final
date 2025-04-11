@@ -45,7 +45,7 @@ Vision Assist addresses these challenges by transforming standard smartphones in
 
 Vision Assist directly supports:
 
-- **SDG 3**: Good Health and Well-being
+- **SDG 10**: Reduced Inequality
 
 ## 🚀 Getting Started
 
