@@ -13,7 +13,7 @@
 
 ## 🏆 Project Overview
 
-Vision Assist is an innovative mobile application that leverages cutting-edge AI technologies to provide real-time environmental awareness and navigation assistance for visually impaired individuals. By combining YOLOv8 object detection, Google Maps navigation, and Gemini AI's natural language capabilities, we've created a comprehensive solution that enhances independence and safety.
+Vision Assist is an innovative mobile application that leverages cutting-edge AI technologies to provide real-time environmental awareness and navigation assistance for visually impaired individuals. By combining Google Mediapipe object detection, Google Maps navigation, and Gemini AI's natural language capabilities, we've created a comprehensive solution that enhances independence and safety.
 
 ### Key Features
 
