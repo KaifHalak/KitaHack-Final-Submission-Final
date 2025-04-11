@@ -41,16 +41,6 @@ Vision Assist addresses these challenges by transforming standard smartphones in
 - **Google Maps Platform**: Precise navigation
 - **Gemini AI**: Environment Threat Analysis
 
-## 📊 Impact & Metrics
-
-
-### Technical Performance
-
-- 30 FPS object detection
-- 200ms audio feedback latency
-- 1-meter location accuracy
-- 99% offline reliability
-
 ## 🎯 Alignment with SDGs
 
 Vision Assist directly supports:
