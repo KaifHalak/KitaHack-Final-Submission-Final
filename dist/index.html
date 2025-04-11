@@ -1,12 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Vision Assist App</title>
-
-    <style>
-        body {
+<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Vision Assist App</title><style>body {
             margin: 0;
             padding: 0;
             font-family: Arial, sans-serif;
@@ -157,29 +149,4 @@
             100% {
                 transform: rotate(360deg);
             }
-            } 
-    </style>
-</head>
-<body>
-    <div id="container">
-
-        
-        <div class="loader-container">
-            <span class="loader"></span>
-        </div>
-
-        <video id="video" playsinline></video>
-        <div id="controls">
-            <button id="start-button" aria-label="Start camera">Start Camera</button>
-            <button id="destination-button" aria-label="Set destination">Destination</button>
-        </div>
-        <div id="map-container"></div>
-        <div id="destination-input">
-            <input type="text" id="location-input" placeholder="Enter destination">
-            <button id="confirm-destination">Confirm</button>
-        </div>
-        <div id="detection-info" role="region" aria-label="Object detection information"></div>
-    </div>
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB1Gq0W_xCDo8LQ4cpZgwfLJYBdTz2tiZk&libraries=places"></script>
-</body>
-</html> 
+            }</style><script defer="defer" src="bundle.js"></script></head><body><div id="container"><div class="loader-container"><span class="loader"></span></div><video id="video" playsinline></video><div id="controls"><button id="start-button" aria-label="Start camera">Start Camera</button> <button id="destination-button" aria-label="Set destination">Destination</button></div><div id="map-container"></div><div id="destination-input"><input id="location-input" placeholder="Enter destination"> <button id="confirm-destination">Confirm</button></div><div id="detection-info" role="region" aria-label="Object detection information"></div></div><script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB1Gq0W_xCDo8LQ4cpZgwfLJYBdTz2tiZk&libraries=places"></script></body></html>

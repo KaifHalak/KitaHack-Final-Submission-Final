@@ -40,12 +40,12 @@ const VERY_CLOSE_RATIO = 0.08;         // Area ratio threshold for "very close" 
                                        // Lower: Warnings only when very close
                                        // Range: 0.05-0.2
 
-const GETTING_CLOSE_RATIO = 0.03;      // Area ratio threshold for "getting close" warning (0-1)
+const GETTING_CLOSE_RATIO = 0.05;      // Area ratio threshold for "getting close" warning (0-1)
                                        // Should be lower than VERY_CLOSE_RATIO
                                        // Range: 0.02-0.1
 
 // Speech Synthesis Constants
-const ANNOUNCEMENT_DELAY = 5000;        // Minimum milliseconds between announcements
+const ANNOUNCEMENT_DELAY = 1000;        // Minimum milliseconds between announcements
                                        // Higher: Less frequent announcements
                                        // Lower: More frequent announcements
                                        // Range: 1000-5000
@@ -71,7 +71,7 @@ const TRACK_CLEANUP_DELAY = 1500;      // Milliseconds before removing stale tra
                                        // Range: 1000-3000
 
 // Speech Warning Constants
-const SPEECH_UPDATE_INTERVAL = 20;     // Frames between speech updates
+const SPEECH_UPDATE_INTERVAL = 25;     // Frames between speech updates
                                       // Higher: Less frequent warnings
                                       // Lower: More frequent warnings
                                       // Range: 10-30
@@ -92,7 +92,7 @@ const APPROACH_SPEED_THRESHOLD = 50;   // Pixels per second to consider object a
                                       // Range: 30-100
 
 // Gemini Scene Analysis Constants
-const SCENE_ANALYSIS_INTERVAL = 20000;    // Milliseconds between scene analyses
+const SCENE_ANALYSIS_INTERVAL = 15000;    // Milliseconds between scene analyses
                                         // Higher: Less frequent but saves resources
                                         // Lower: More frequent but more API calls
                                         // Range: 3000-10000
@@ -102,7 +102,7 @@ const SCENE_CLIP_DURATION = 3000;        // Milliseconds of footage to analyze
                                         // Lower: Faster but less context
                                         // Range: 2000-5000
 
-const MAX_FRAMES_PER_CLIP = 10;          // Maximum frames to send to Gemini
+const MAX_FRAMES_PER_CLIP = 5;          // Maximum frames to send to Gemini
                                         // Higher: Better analysis but more data
                                         // Lower: Less accurate but faster
                                         // Range: 5-15
@@ -110,12 +110,18 @@ const MAX_FRAMES_PER_CLIP = 10;          // Maximum frames to send to Gemini
 const GEMINI_PRIORITY = 'gemini';  // Highest priority level for Gemini narrations
                                   // Priority hierarchy: gemini > urgent > normal
 
+
+const CHECK_CURRENT_STEP_INTERVAL = 20000 // Wait 20 seconds before checking current step on google maps
+
 class VisionAssistApp {
     constructor() {
         this.video = document.getElementById('video');
         this.startButton = document.getElementById('start-button');
-        this.videoInput = document.getElementById('video-input');
-        this.playVideoButton = document.getElementById('play-video');
+        this.destinationButton = document.getElementById('destination-button');
+        this.mapContainer = document.getElementById('map-container');
+        this.locationInput = document.getElementById('location-input');
+        this.confirmDestination = document.getElementById('confirm-destination');
+        this.destinationInput = document.getElementById('destination-input');
         this.detectionInfo = document.getElementById('detection-info');
         this.detector = null;
         this.stream = null;
@@ -127,12 +133,12 @@ class VisionAssistApp {
         this.canvasCtx = this.canvas.getContext('2d');
 
         // Modify tracking properties
-        this.previousDetections = new Map(); // Store previous frame detections
+        this.previousDetections = new Map();
         this.trackingThreshold = TRACKING_IOU_THRESHOLD;
-        this.trackedObjects = new Map(); // Store object tracking history
-        this.objectIdCounter = 0; // Unique ID for each tracked object
+        this.trackedObjects = new Map();
+        this.objectIdCounter = 0;
         this.speechSynthesis = window.speechSynthesis;
-        this.lastAnnouncement = 0; // To prevent too frequent announcements
+        this.lastAnnouncement = 0;
         this.announcementDelay = ANNOUNCEMENT_DELAY;
         
         // Enhanced tracking properties
@@ -142,11 +148,14 @@ class VisionAssistApp {
         // Add frame counter and update interval
         this.frameCounter = 0;
         this.measurementInterval = MEASUREMENT_INTERVAL;
+
+        // loading spinner
+        this.loaderContainer = document.querySelector('.loader-container');
         
         // Event listeners
         this.startButton.addEventListener('click', () => this.toggleCamera());
-        this.videoInput.addEventListener('change', () => this.handleVideoUpload());
-        this.playVideoButton.addEventListener('click', () => this.toggleVideo());
+        this.destinationButton.addEventListener('click', () => this.showDestinationInput());
+        this.confirmDestination.addEventListener('click', () => this.handleDestinationConfirmation());
         
         // Initialize detector
         this.initializeDetector();
@@ -155,7 +164,7 @@ class VisionAssistApp {
         this.initializeSpeech();
 
         this.speechCounter = 0;
-        this.lastWarnings = new Map(); // Track last warnings for each object
+        this.lastWarnings = new Map();
 
         // Add new properties for scene analysis
         this.frameBuffer = [];
@@ -169,34 +178,16 @@ class VisionAssistApp {
         this.speechQueue = [];
         this.isGeminiSpeaking = false;
         this.currentUtterance = null;
-    }
 
-    async handleVideoUpload() {
-        const file = this.videoInput.files[0];
-        if (file) {
-            const videoUrl = URL.createObjectURL(file);
-            this.video.src = videoUrl;
-            this.playVideoButton.disabled = false;
-            
-            // Stop camera if it's running
-            if (this.isCamera) {
-                this.stopCamera();
-            }
-        }
-    }
-
-    async toggleVideo() {
-        if (!this.isRunning) {
-            this.isCamera = false;
-            this.isRunning = true;
-            this.playVideoButton.textContent = 'Stop Video';
-            await this.video.play();
-            this.detectObjects();
-        } else {
-            this.isRunning = false;
-            this.video.pause();
-            this.playVideoButton.textContent = 'Play Video';
-        }
+        // Maps-related properties
+        this.map = null;
+        this.directionsService = null;
+        this.directionsRenderer = null;
+        this.currentPosition = null;
+        this.watchId = null;
+        
+        // Initialize maps-related event listeners
+        this.initializeMaps();
     }
 
     async toggleCamera() {
@@ -224,7 +215,6 @@ class VisionAssistApp {
             this.isCamera = true;
             this.isRunning = true;
             this.startButton.textContent = 'Stop Camera';
-            this.playVideoButton.disabled = true;
             this.detectObjects();
         } catch (error) {
             console.error('Error starting camera:', error);
@@ -239,7 +229,6 @@ class VisionAssistApp {
             this.isRunning = false;
             this.isCamera = false;
             this.startButton.textContent = 'Start Camera';
-            this.playVideoButton.disabled = false;
         }
     }
 
@@ -534,7 +523,6 @@ class VisionAssistApp {
         this.video.addEventListener('ended', () => {
             if (!this.isCamera) {
                 this.isRunning = false;
-                this.playVideoButton.textContent = 'Play Video';
             }
         });
     }
@@ -553,7 +541,7 @@ class VisionAssistApp {
         
         // Create speech item
         const speechItem = {
-            message,
+            message: message,
             priority,
             timestamp: now
         };
@@ -861,36 +849,24 @@ class VisionAssistApp {
                 return;
             }
 
-            // Capture frames for the clip duration
-            const MAX_FRAMES_TO_SEND = 3; // Reduce number of frames to analyze
-            const skipFrames = Math.floor(MAX_FRAMES_PER_CLIP / MAX_FRAMES_TO_SEND);
-
-            const frames = [];
-            const captureInterval = SCENE_CLIP_DURATION / MAX_FRAMES_PER_CLIP;
-            
-            for (let i = 0; i < MAX_FRAMES_PER_CLIP; i += skipFrames) {
-                const frame = await this.captureFrame();
-                frames.push(frame);
-                await new Promise(resolve => setTimeout(resolve, captureInterval * skipFrames));
-            }
+            // Capture a single frame for analysis
+            const frame = await this.captureFrame();
 
             // Prepare the prompt for Gemini
-            const prompt = `You are a vision assistant guiding someone to navigate safely. Speak directly to them. 
+            const prompt = `You are a vision assistant guiding a visually impaired person to navigate safely. Speak directly to them. 
             Describe hazards, movement patterns, and overall safety clearly and concisely. 
             
-            Format: 
-            1. Start with a brief summary of the situation. 
-            2. Provide clear, direct guidance on what to do.
+            Output Instruction:
+            Analyze any potential hazards in the way and provide clear, direct guidance on what to do. The output must be a short paragraph with a maximum of 4 sentences.
             
             IMPORTANT: Use short, direct sentences. No extra commentary. Just give practical, spoken-style advice. 
             
             Example: 
             "Watch out for pedestrians ahead. Step slightly to your right to avoid collisions. The path looks clear, but stay alert for sudden obstacles."
             `;
-            ;
 
-            // Call Gemini API (implementation depends on your setup)
-            const analysis = await this.callGeminiAPI(frames, prompt);
+            // Call Gemini API with single frame
+            let analysis = await this.callGeminiAPI([frame], prompt);
             
             // Convert analysis to speech
             if (analysis && analysis.trim()) {
@@ -925,10 +901,11 @@ class VisionAssistApp {
 
             const result = await model.generateContent(parts);
             const response = await result.response;
-            const text = response.text();
+            let text = response.text();
             
             // Use GEMINI_PRIORITY when speaking Gemini's response
             if (text && text.trim()) {
+                text = "Gemini Environment Analysis: " + text
                 this.speak(text, GEMINI_PRIORITY);
             }
             
@@ -950,9 +927,186 @@ class VisionAssistApp {
         return urgentKeywords.some(keyword => 
             analysis.toLowerCase().includes(keyword)) ? 'urgent' : 'normal';
     }
+
+    initializeMaps() {
+        console.log("INITIALIZING MAPS")
+        this.destinationButton.addEventListener('click', () => {
+            console.log("CLICKED")
+            this.showDestinationInput()
+        });
+        this.confirmDestination.addEventListener('click', () => this.handleDestinationConfirmation());
+        
+        // Initialize Google Maps services
+        this.directionsService = new google.maps.DirectionsService();
+        this.directionsRenderer = new google.maps.DirectionsRenderer({
+            suppressMarkers: true,
+            polylineOptions: {
+                strokeColor: '#007bff',
+                strokeWeight: 5
+            }
+        });
+
+        // Initialize map
+        this.map = new google.maps.Map(this.mapContainer, {
+            zoom: 15,
+            center: { lat: 0, lng: 0 },
+            disableDefaultUI: true,
+            zoomControl: true
+        });
+
+        this.directionsRenderer.setMap(this.map);
+    }
+
+    showDestinationInput() {
+        this.destinationInput.style.display = 'block';
+        this.locationInput.focus();
+    }
+
+    async handleDestinationConfirmation() {
+        const destination = this.locationInput.value;
+        if (!destination) return;
+
+        // show loading spinner
+        this.loaderContainer.style.display = 'flex';
+
+        try {
+            // Get current position
+            if (!this.currentPosition) {
+                this.currentPosition = await this.getCurrentPosition();
+            }
+
+            // Start watching position
+            if (!this.watchId) {
+                this.watchId = navigator.geolocation.watchPosition(
+                    (position) => this.updatePosition(position),
+                    (error) => console.error('Geolocation error:', error),
+                    { enableHighAccuracy: true }
+                );
+            }
+
+            // Calculate route
+            await this.calculateRoute(destination);
+            
+            // Hide input and show map
+            this.destinationInput.style.display = 'none';
+            this.mapContainer.style.display = 'block';
+            
+            // Ensure map is properly centered
+            if (this.map && this.currentPosition) {
+                this.map.setCenter({
+                    lat: this.currentPosition.coords.latitude,
+                    lng: this.currentPosition.coords.longitude
+                });
+            }
+
+            this.loaderContainer.style.display = 'none';
+            
+        } catch (error) {
+            console.error('Error handling destination:', error);
+            this.speak('Unable to get directions. Please try again.', 'normal');
+        }
+    }
+
+    getCurrentPosition() {
+        return new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(
+                (position) => resolve(position),
+                (error) => reject(error),
+                { enableHighAccuracy: true }
+            );
+        });
+    }
+
+    updatePosition(position) {
+        this.currentPosition = position;
+        if (this.map && this.directionsRenderer) {
+            this.map.setCenter({
+                lat: position.coords.latitude,
+                lng: position.coords.longitude
+            });
+        }
+    }
+
+    async calculateRoute(destination) {
+        if (!this.currentPosition) return;
+
+        const request = {
+            origin: {
+                lat: this.currentPosition.coords.latitude,
+                lng: this.currentPosition.coords.longitude
+            },
+            destination: destination,
+            travelMode: google.maps.TravelMode.WALKING
+        };
+
+        try {
+            const result = await this.directionsService.route(request);
+            this.directionsRenderer.setDirections(result);
+            this.provideNavigationInstructions(result);
+        } catch (error) {
+            console.error('Error calculating route:', error);
+            this.speak('Unable to calculate route. Please try again.', 'normal');
+        }
+    }
+
+    provideNavigationInstructions(result) {
+        const route = result.routes[0];
+        const steps = route.legs[0].steps;
+        
+        // Speak initial instruction
+        this.speak(`Starting navigation to ${this.locationInput.value}.`, 'normal');
+        
+        // Set up interval to check current step
+        setInterval(() => {
+            if (!this.currentPosition) return;
+            
+            const currentStep = this.findCurrentStep(steps);
+            if (currentStep) {
+                const instruction = currentStep.instructions.replace(/<[^>]*>/g, '');
+                this.speak(instruction, 'normal');
+            }
+        }, CHECK_CURRENT_STEP_INTERVAL); // Check every 5 seconds
+    }
+
+    findCurrentStep(steps) {
+        if (!this.currentPosition) return null;
+        
+        const currentLat = this.currentPosition.coords.latitude;
+        const currentLng = this.currentPosition.coords.longitude;
+        
+        for (const step of steps) {
+            const distance = this.calculateDistance(
+                currentLat,
+                currentLng,
+                step.end_location.lat(),
+                step.end_location.lng()
+            );
+            
+            if (distance < 20) { // Within 20 meters of step end
+                return step;
+            }
+        }
+        
+        return null;
+    }
+
+    calculateDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371e3; // Earth's radius in meters
+        const φ1 = lat1 * Math.PI/180;
+        const φ2 = lat2 * Math.PI/180;
+        const Δφ = (lat2-lat1) * Math.PI/180;
+        const Δλ = (lon2-lon1) * Math.PI/180;
+
+        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                Math.cos(φ1) * Math.cos(φ2) *
+                Math.sin(Δλ/2) * Math.sin(Δλ/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+        return R * c;
+    }
 }
 
 // Initialize the app when the page loads
-window.addEventListener('load', () => {
+document.addEventListener('DOMContentLoaded', () => {
     new VisionAssistApp();
-}); 
+});
